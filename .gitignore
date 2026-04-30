@@ -1,0 +1,20 @@
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local IDE state
+.idea/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime output
+logs/
+data/
+captures/
+exports/
+*.log
+

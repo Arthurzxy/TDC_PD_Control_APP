@@ -1,0 +1,43 @@
+{
+  "target_temperature_c": 0.0,
+  "analog_targets": {
+    "laser_sync_threshold_mv": 11.0,
+    "pixel_sync_threshold_mv": 555.0,
+    "avalanche_threshold_mv": 1000.0,
+    "bias_voltage_v": 20.0
+  },
+  "gate_settings": {
+    "hold_off_time": 0,
+    "divider": 1,
+    "sig2_enable": false,
+    "sig3_enable": false,
+    "pixel_mode": false,
+    "sig2_delay_coarse": 0,
+    "sig2_delay_fine": 0,
+    "sig2_width_coarse": 0,
+    "sig2_width_fine": 10,
+    "sig3_delay_coarse": 0,
+    "sig3_delay_fine": 0,
+    "sig3_width_coarse": 0,
+    "sig3_width_fine": 10
+  },
+  "marker_mapping": {
+    "line_event_class": 1,
+    "pixel_event_class": 2
+  },
+  "histogram_settings": {
+    "bin_width_raw": 1,
+    "bin_offset": 0,
+    "bin_count": 4096
+  },
+  "save_directory": "./sessions",
+  "device_index": 0,
+  "read_pipe": 130,
+  "write_pipe": 2,
+  "read_block_size": 262144,
+  "read_enabled": false,
+  "threshold_range_mv": 2500.0,
+  "bias_scale": 433.0,
+  "temperature_encode_formula_version": "legacy_main_1_py_v1",
+  "protocol_version": "uplink_v1_downlink_legacy_bb"
+}
