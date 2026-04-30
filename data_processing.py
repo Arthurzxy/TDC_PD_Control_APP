@@ -7,7 +7,16 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 from PyQt5 import QtCore
 
-from app.models import AppConfig, HistogramSettings, HistogramSnapshot, MarkerMapping, SessionMetadata, StatusPacket, TdcEvent
+from app.models import (
+    AppConfig,
+    HistogramSettings,
+    HistogramSnapshot,
+    MarkerMapping,
+    PhotonEvent,
+    SessionMetadata,
+    StatusPacket,
+    TdcEvent,
+)
 from app.protocol import PacketParser
 from app.storage import AnalysisExportService, RawDataWriter, SessionRepository
 from app.usb_link import DeviceService
@@ -58,6 +67,14 @@ class HistogramBuilder:
         bin_idx = self.bin_index(event.tstop)
         if bin_idx is None:
             return
+        self.add_bin(row, col, bin_idx)
+
+    def process_photon(self, event: PhotonEvent) -> None:
+        self.add_bin(event.line_id, event.pixel_id, event.bin_index)
+
+    def add_bin(self, row: int, col: int, bin_idx: int) -> None:
+        if bin_idx < 0 or bin_idx >= self.settings.bin_count:
+            return
         key = (row, col)
         if key not in self.histograms:
             self.histograms[key] = np.zeros(self.settings.bin_count, dtype=np.uint32)
@@ -97,6 +114,10 @@ class SessionReplayer:
                 if not chunk:
                     break
                 for packet in parser.feed(chunk):
+                    for photon in packet.photon_events or []:
+                        hist_builder.process_photon(photon)
+                        state_machine.state.current_row = photon.line_id
+                        state_machine.state.current_col = photon.pixel_id
                     for event in packet.tdc_events or []:
                         is_measurement, row, col = state_machine.process_event(event)
                         if is_measurement:
@@ -125,6 +146,7 @@ class AcquisitionService(QtCore.QObject):
 
         self.device_service.raw_bytes_received.connect(self._handle_raw_bytes)
         self.device_service.tdc_events_received.connect(self._handle_tdc_events)
+        self.device_service.photon_events_received.connect(self._handle_photon_events)
         self.device_service.status_received.connect(self._handle_status)
 
     def start_recording(self, session_name: str = "capture", notes: str = "") -> Path:
@@ -158,6 +180,7 @@ class AcquisitionService(QtCore.QObject):
             AnalysisExportService.export_npz(npz_path, histograms, image)
             self.session_metadata.packet_count = self.device_service.runtime_stats.packet_count
             self.session_metadata.tdc_event_count = self.device_service.runtime_stats.tdc_event_count
+            self.session_metadata.photon_event_count = self.device_service.runtime_stats.photon_event_count
             SessionRepository.save_metadata(self.session_dir / "session.json", self.session_metadata)
         self.recording_state_changed.emit(False, "")
 
@@ -176,6 +199,13 @@ class AcquisitionService(QtCore.QObject):
             is_measurement, row, col = self.scan_state.process_event(event)
             if is_measurement:
                 self.hist_builder.process_measurement(row, col, event)
+        self.histogram_updated.emit(self.current_snapshot())
+
+    def _handle_photon_events(self, events: list[PhotonEvent]) -> None:
+        for event in events:
+            self.scan_state.state.current_row = event.line_id
+            self.scan_state.state.current_col = event.pixel_id
+            self.hist_builder.process_photon(event)
         self.histogram_updated.emit(self.current_snapshot())
 
     def _handle_status(self, status: StatusPacket) -> None:

@@ -109,6 +109,7 @@ class SessionMetadata:
     analysis_file_name: str = "analysis.npz"
     packet_count: int = 0
     tdc_event_count: int = 0
+    photon_event_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -188,6 +189,7 @@ class RuntimeStats:
     tx_bytes: int = 0
     packet_count: int = 0
     tdc_event_count: int = 0
+    photon_event_count: int = 0
     status_count: int = 0
 
 
@@ -197,6 +199,7 @@ class PacketRates:
     tx_bytes_per_sec: float = 0.0
     packets_per_sec: float = 0.0
     tdc_events_per_sec: float = 0.0
+    photon_events_per_sec: float = 0.0
 
 
 @dataclass

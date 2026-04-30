@@ -985,6 +985,7 @@ class DeviceService(QtCore.QObject):
     packet_received = QtCore.pyqtSignal(object)
     status_received = QtCore.pyqtSignal(object)
     tdc_events_received = QtCore.pyqtSignal(object)
+    photon_events_received = QtCore.pyqtSignal(object)
     raw_bytes_received = QtCore.pyqtSignal(bytes)
     stats_updated = QtCore.pyqtSignal(object, object)
     read_state_changed = QtCore.pyqtSignal(bool)
@@ -1001,6 +1002,7 @@ class DeviceService(QtCore.QObject):
         self.tx_rate_meter = RateMeter()
         self.packet_rate_meter = RateMeter()
         self.event_rate_meter = RateMeter()
+        self.photon_event_rate_meter = RateMeter()
         self.command_history: deque[CommandHistoryItem] = deque(maxlen=200)
         self.latest_status: Optional[StatusPacket] = None
         self._status_event = threading.Event()
@@ -1251,6 +1253,8 @@ class DeviceService(QtCore.QObject):
             return "TDC_RAW"
         if pkt_type == protocol.PKT_STATUS:
             return "STATUS"
+        if pkt_type == protocol.PKT_PHOTON_EVENT:
+            return "PHOTON"
         return f"0x{pkt_type:02X}"
 
     def _format_parsed_packet(self, packet) -> str:
@@ -1279,6 +1283,16 @@ class DeviceService(QtCore.QObject):
             if len(packet.tdc_events) > len(preview):
                 event_text += f"; ... (+{len(packet.tdc_events) - len(preview)} event(s))"
             message += f" | TDC events={len(packet.tdc_events)} [{event_text or 'none'}]"
+        elif packet.photon_events is not None:
+            preview = packet.photon_events[:4]
+            event_text = "; ".join(
+                f"#{idx}:line={event.line_id},pixel={event.pixel_id},"
+                f"bin={event.bin_index},dt_8ps={event.dt_8ps}"
+                for idx, event in enumerate(preview)
+            )
+            if len(packet.photon_events) > len(preview):
+                event_text += f"; ... (+{len(packet.photon_events) - len(preview)} event(s))"
+            message += f" | Photon events={len(packet.photon_events)} [{event_text or 'none'}]"
         return message
 
     def send_command_sync(
@@ -1339,6 +1353,9 @@ class DeviceService(QtCore.QObject):
             if packet.tdc_events is not None:
                 self.runtime_stats.tdc_event_count += len(packet.tdc_events)
                 self.tdc_events_received.emit(packet.tdc_events)
+            if packet.photon_events is not None:
+                self.runtime_stats.photon_event_count += len(packet.photon_events)
+                self.photon_events_received.emit(packet.photon_events)
         self._emit_stats()
 
     def _handle_tx_bytes(self, count: int) -> None:
@@ -1371,7 +1388,10 @@ class DeviceService(QtCore.QObject):
             "rx_bytes_per_sec": self.rx_rate_meter.update(self.runtime_stats.rx_bytes),
             "tx_bytes_per_sec": self.tx_rate_meter.update(self.runtime_stats.tx_bytes),
             "packets_per_sec": self.packet_rate_meter.update(self.runtime_stats.packet_count),
-            "tdc_events_per_sec": self.event_rate_meter.update(self.runtime_stats.tdc_event_count),
+            "tdc_events_per_sec": self.event_rate_meter.update(
+                self.runtime_stats.photon_event_count + self.runtime_stats.tdc_event_count
+            ),
+            "photon_events_per_sec": self.photon_event_rate_meter.update(self.runtime_stats.photon_event_count),
         }
         self.stats_updated.emit(self.runtime_stats, rates)
 

@@ -94,6 +94,41 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(event.dt_8ps, 625)
         self.assertEqual(event.detector_timestamp_low, 0x12345678)
 
+    def test_parse_multi_photon_event_packet_from_latest_fpga(self) -> None:
+        parser = PacketParser()
+        words = [
+            0xA5040104,
+            0x0001000F,
+            0x00030000,
+            0x00000010,
+            0xA55AF00D,
+            0x01000001,
+            0x0002004E,
+            0x00000271,
+            0x00000659,
+            0xA55AF00D,
+            0x01000001,
+            0x000300BB,
+            0x000005DC,
+            0x00003A98,
+            0xA55AF00D,
+            0x01000002,
+            0x000101D4,
+            0x00000EA6,
+            0x00007436,
+        ]
+        packet = b"".join(pack_u32_le(word) for word in words)
+        parsed = parser.feed(packet)
+        self.assertEqual(len(parsed), 1)
+        events = parsed[0].photon_events
+        self.assertIsNotNone(events)
+        self.assertEqual(len(events), 3)
+        self.assertEqual([(e.line_id, e.pixel_id, e.bin_index, e.dt_8ps) for e in events], [
+            (1, 2, 78, 625),
+            (1, 3, 187, 1500),
+            (2, 1, 468, 3750),
+        ])
+
 
 if __name__ == "__main__":
     unittest.main()
