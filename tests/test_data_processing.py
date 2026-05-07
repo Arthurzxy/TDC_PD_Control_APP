@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from app.data_processing import HistogramBuilder
-from app.models import HistogramSettings, PacketHeader, PhotonEvent
+from app.data_processing import HistogramBuilder, TdcTestHistogramBuilder
+from app.models import HistogramSettings, PacketHeader, PhotonEvent, TdcEvent, TdcTestSettings
 
 
 class DataProcessingTests(unittest.TestCase):
@@ -40,6 +40,39 @@ class DataProcessingTests(unittest.TestCase):
         self.assertEqual(snapshot.current_col, 3)
         self.assertEqual(snapshot.image_projection[2][3], 1)
         self.assertEqual(snapshot.histograms["2,3"][187], 1)
+
+    def test_tdc_test_histogram_pairs_start_stop_channels(self) -> None:
+        header = PacketHeader(
+            sync=0xA5,
+            pkt_type=0x01,
+            version=0x01,
+            hdr_words=4,
+            seq=1,
+            payload_words=4,
+            item_count=2,
+            flags=0,
+            timestamp_us=123,
+        )
+        builder = TdcTestHistogramBuilder(
+            TdcTestSettings(
+                enabled=True,
+                start_channel=0,
+                stop_channel=1,
+                refclk_divisions=12500,
+                bin_width_raw=8,
+                bin_offset=0,
+                bin_count=64,
+            )
+        )
+        start = TdcEvent(header, 0, 0, 0, 0, 100, 0, 1, 123)
+        stop = TdcEvent(header, 0, 1, 0, 0, 180, 0, 1, 123)
+
+        updated = builder.process_events([start, stop])
+        snapshot = builder.snapshot()
+
+        self.assertTrue(updated)
+        self.assertEqual(snapshot.image_projection[0][0], 1)
+        self.assertEqual(snapshot.histograms["tdc_test"][10], 1)
 
 
 if __name__ == "__main__":

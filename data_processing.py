@@ -15,6 +15,7 @@ from app.models import (
     PhotonEvent,
     SessionMetadata,
     StatusPacket,
+    TdcTestSettings,
     TdcEvent,
 )
 from app.protocol import PacketParser
@@ -99,6 +100,74 @@ class HistogramBuilder:
         )
 
 
+class TdcTestHistogramBuilder:
+    def __init__(self, settings: TdcTestSettings) -> None:
+        self.settings = settings
+        self.histogram = np.zeros(settings.bin_count, dtype=np.uint32)
+        self.last_start_timestamp: Optional[int] = None
+        self.start_count = 0
+        self.stop_count = 0
+        self.paired_count = 0
+
+    def configure(self, settings: TdcTestSettings) -> None:
+        self.settings = settings
+        self.clear()
+
+    def clear(self) -> None:
+        self.histogram = np.zeros(self.settings.bin_count, dtype=np.uint32)
+        self.last_start_timestamp = None
+        self.start_count = 0
+        self.stop_count = 0
+        self.paired_count = 0
+
+    def timestamp_raw(self, event: TdcEvent) -> int:
+        return int(event.refid) * max(1, int(self.settings.refclk_divisions)) + int(event.tstop)
+
+    def bin_index(self, dt_raw: int) -> int | None:
+        idx = (int(dt_raw) - self.settings.bin_offset) // max(1, self.settings.bin_width_raw)
+        if idx < 0 or idx >= self.settings.bin_count:
+            return None
+        return int(idx)
+
+    def process_event(self, event: TdcEvent) -> bool:
+        if not self.settings.enabled:
+            return False
+        if event.channel == self.settings.start_channel:
+            self.last_start_timestamp = self.timestamp_raw(event)
+            self.start_count += 1
+            return False
+        if event.channel != self.settings.stop_channel:
+            return False
+
+        self.stop_count += 1
+        if self.last_start_timestamp is None:
+            return False
+        dt_raw = self.timestamp_raw(event) - self.last_start_timestamp
+        if dt_raw < 0:
+            return False
+        bin_idx = self.bin_index(dt_raw)
+        if bin_idx is None:
+            return False
+        self.histogram[bin_idx] += 1
+        self.paired_count += 1
+        return True
+
+    def process_events(self, events: list[TdcEvent]) -> bool:
+        updated = False
+        for event in events:
+            updated = self.process_event(event) or updated
+        return updated
+
+    def snapshot(self) -> HistogramSnapshot:
+        image = [[int(self.paired_count)]]
+        return HistogramSnapshot(
+            histograms={"tdc_test": self.histogram.astype(int).tolist()},
+            image_projection=image,
+            current_row=0,
+            current_col=0,
+        )
+
+
 class SessionReplayer:
     def __init__(self, mapping: MarkerMapping, histogram_settings: HistogramSettings) -> None:
         self.mapping = mapping
@@ -130,6 +199,7 @@ class SessionReplayer:
 
 class AcquisitionService(QtCore.QObject):
     histogram_updated = QtCore.pyqtSignal(object)
+    tdc_test_histogram_updated = QtCore.pyqtSignal(object)
     recording_state_changed = QtCore.pyqtSignal(bool, str)
     status_packet_updated = QtCore.pyqtSignal(object)
 
@@ -140,6 +210,7 @@ class AcquisitionService(QtCore.QObject):
         self.raw_writer = RawDataWriter()
         self.scan_state = ScanStateMachine(config.marker_mapping)
         self.hist_builder = HistogramBuilder(config.histogram_settings)
+        self.tdc_test_builder = TdcTestHistogramBuilder(config.tdc_test_settings)
         self.recording = False
         self.session_dir: Optional[Path] = None
         self.session_metadata: Optional[SessionMetadata] = None
@@ -190,11 +261,28 @@ class AcquisitionService(QtCore.QObject):
             current_col=self.scan_state.state.current_col,
         )
 
+    def current_tdc_test_snapshot(self) -> HistogramSnapshot:
+        return self.tdc_test_builder.snapshot()
+
+    def configure_tdc_test(self, settings: TdcTestSettings) -> HistogramSnapshot:
+        self.tdc_test_builder.configure(settings)
+        snapshot = self.current_tdc_test_snapshot()
+        self.tdc_test_histogram_updated.emit(snapshot)
+        return snapshot
+
+    def clear_tdc_test(self) -> HistogramSnapshot:
+        self.tdc_test_builder.clear()
+        snapshot = self.current_tdc_test_snapshot()
+        self.tdc_test_histogram_updated.emit(snapshot)
+        return snapshot
+
     def _handle_raw_bytes(self, data: bytes) -> None:
         if self.recording:
             self.raw_writer.write(data)
 
     def _handle_tdc_events(self, events: list[TdcEvent]) -> None:
+        if self.tdc_test_builder.process_events(events):
+            self.tdc_test_histogram_updated.emit(self.current_tdc_test_snapshot())
         for event in events:
             is_measurement, row, col = self.scan_state.process_event(event)
             if is_measurement:

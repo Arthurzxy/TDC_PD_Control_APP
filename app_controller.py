@@ -7,7 +7,7 @@ from PyQt5 import QtCore
 
 from app.data_processing import AcquisitionService, AnalysisService
 from app.fpga_control import AnalogControlService, FlashService, FpgaControlService, PixelArrayService, TemperatureControlService
-from app.models import AppConfig, CommandResult, HistogramSnapshot, PixelParamRecord, StatusFlagsDecoded
+from app.models import AppConfig, CommandResult, HistogramSnapshot, PixelParamRecord, StatusFlagsDecoded, TdcTestSettings
 from app.protocol import LegacyAnalogCodec
 from app.storage import AnalysisExportService, ConfigRepository, PixelArrayRepository
 from app.usb_link import DeviceInfo, DeviceService
@@ -19,6 +19,7 @@ class AppController(QtCore.QObject):
     stats_updated = QtCore.pyqtSignal(object, object)
     status_received = QtCore.pyqtSignal(object)
     histogram_updated = QtCore.pyqtSignal(object)
+    tdc_test_histogram_updated = QtCore.pyqtSignal(object)
     recording_state_changed = QtCore.pyqtSignal(bool, str)
     replay_completed = QtCore.pyqtSignal(object)
     temperature_target_changed = QtCore.pyqtSignal(float, int)
@@ -57,6 +58,7 @@ class AppController(QtCore.QObject):
         self._temperature_service.target_changed.connect(self.temperature_target_changed.emit)
         self._analog_service.analog_targets_changed.connect(self.analog_targets_changed.emit)
         self._acquisition_service.histogram_updated.connect(self.histogram_updated.emit)
+        self._acquisition_service.tdc_test_histogram_updated.connect(self.tdc_test_histogram_updated.emit)
         self._acquisition_service.recording_state_changed.connect(self.recording_state_changed.emit)
         self._analysis_service.replay_completed.connect(self.replay_completed.emit)
         self.log_message.emit(
@@ -260,6 +262,43 @@ class AppController(QtCore.QObject):
 
     def current_snapshot(self) -> HistogramSnapshot:
         return self._acquisition_service.current_snapshot()
+
+    def current_tdc_test_snapshot(self) -> HistogramSnapshot:
+        return self._acquisition_service.current_tdc_test_snapshot()
+
+    def configure_tdc_test(
+        self,
+        enabled: bool,
+        start_channel_ui: int,
+        stop_channel_ui: int,
+        refclk_divisions: int,
+        bin_width_raw: int,
+        bin_offset: int,
+        bin_count: int,
+    ) -> HistogramSnapshot:
+        settings = TdcTestSettings(
+            enabled=bool(enabled),
+            start_channel=max(0, min(3, int(start_channel_ui) - 1)),
+            stop_channel=max(0, min(3, int(stop_channel_ui) - 1)),
+            refclk_divisions=max(1, int(refclk_divisions)),
+            bin_width_raw=max(1, int(bin_width_raw)),
+            bin_offset=int(bin_offset),
+            bin_count=max(1, int(bin_count)),
+        )
+        self.config.tdc_test_settings = settings
+        self.save_current_config()
+        snapshot = self._acquisition_service.configure_tdc_test(settings)
+        self.log_message.emit(
+            "TDC test configured: "
+            f"enabled={settings.enabled} start=CH{settings.start_channel + 1} "
+            f"stop=CH{settings.stop_channel + 1} bins={settings.bin_count}"
+        )
+        return snapshot
+
+    def clear_tdc_test_histogram(self) -> HistogramSnapshot:
+        snapshot = self._acquisition_service.clear_tdc_test()
+        self.log_message.emit("TDC test histogram cleared.")
+        return snapshot
 
     def export_histogram_csv(self, path: str | Path) -> bool:
         snapshot = self.current_snapshot()

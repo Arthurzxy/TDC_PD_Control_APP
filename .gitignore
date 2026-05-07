@@ -16,5 +16,5 @@ logs/
 data/
 captures/
 exports/
+sessions/
 *.log
-

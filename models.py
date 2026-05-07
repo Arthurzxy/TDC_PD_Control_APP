@@ -43,12 +43,24 @@ class HistogramSettings:
 
 
 @dataclass
+class TdcTestSettings:
+    enabled: bool = False
+    start_channel: int = 0
+    stop_channel: int = 1
+    refclk_divisions: int = 12500
+    bin_width_raw: int = 1
+    bin_offset: int = 0
+    bin_count: int = 4096
+
+
+@dataclass
 class AppConfig:
     target_temperature_c: float = 25.0
     analog_targets: AnalogTargets = field(default_factory=AnalogTargets)
     gate_settings: GateSettings = field(default_factory=GateSettings)
     marker_mapping: MarkerMapping = field(default_factory=MarkerMapping)
     histogram_settings: HistogramSettings = field(default_factory=HistogramSettings)
+    tdc_test_settings: TdcTestSettings = field(default_factory=TdcTestSettings)
     save_directory: str = "./sessions"
     device_index: int = 0
     read_pipe: int = 0x82
@@ -69,12 +81,14 @@ class AppConfig:
         gate = GateSettings(**data.get("gate_settings", {}))
         mapping = MarkerMapping(**data.get("marker_mapping", {}))
         hist = HistogramSettings(**data.get("histogram_settings", {}))
+        tdc_test = TdcTestSettings(**data.get("tdc_test_settings", {}))
         return cls(
             target_temperature_c=data.get("target_temperature_c", 25.0),
             analog_targets=analog,
             gate_settings=gate,
             marker_mapping=mapping,
             histogram_settings=hist,
+            tdc_test_settings=tdc_test,
             save_directory=data.get("save_directory", "./sessions"),
             device_index=data.get("device_index", 0),
             read_pipe=data.get("read_pipe", 0x82),

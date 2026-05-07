@@ -292,6 +292,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.connection_tab = self._build_connection_tab()
         self.control_tab = self._build_control_tab()
         self.pixel_tab = self._build_pixel_tab()
+        self.tdc_test_tab = self._build_tdc_test_tab()
         self.acquisition_tab = self._build_acquisition_tab()
         self.offline_tab = self._build_offline_tab()
         self.log_tab = self._build_log_tab()
@@ -299,6 +300,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.connection_tab, "设备连接")
         self.tabs.addTab(self.control_tab, "FPGA 控制")
         self.tabs.addTab(self.pixel_tab, "像素阵列")
+        self.tabs.addTab(self.tdc_test_tab, "TDC Test")
         self.tabs.addTab(self.acquisition_tab, "实时采集")
         self.tabs.addTab(self.offline_tab, "离线分析")
         self.tabs.addTab(self.log_tab, "日志调试")
@@ -664,6 +666,69 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(table_card, 1)
         return tab
 
+    def _build_tdc_test_tab(self) -> QtWidgets.QWidget:
+        tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(tab)
+        layout.setSpacing(14)
+
+        controls_card = QtWidgets.QFrame()
+        controls_card.setObjectName("Card")
+        controls_layout = QtWidgets.QGridLayout(controls_card)
+        controls_layout.setContentsMargins(14, 14, 14, 14)
+        controls_layout.setHorizontalSpacing(12)
+        controls_layout.setVerticalSpacing(12)
+
+        self.tdc_test_enable_check = QtWidgets.QCheckBox("Enable")
+        self.tdc_start_combo = QtWidgets.QComboBox()
+        self.tdc_stop_combo = QtWidgets.QComboBox()
+        for combo in (self.tdc_start_combo, self.tdc_stop_combo):
+            for ch in range(1, 5):
+                combo.addItem(f"CH{ch}", ch)
+
+        self.tdc_refdiv_spin = QtWidgets.QSpinBox()
+        self.tdc_refdiv_spin.setRange(1, 1_000_000)
+        self.tdc_refdiv_spin.setValue(12500)
+        self.tdc_bin_width_spin = QtWidgets.QSpinBox()
+        self.tdc_bin_width_spin.setRange(1, 1_000_000)
+        self.tdc_bin_width_spin.setValue(1)
+        self.tdc_bin_offset_spin = QtWidgets.QSpinBox()
+        self.tdc_bin_offset_spin.setRange(0, 1_000_000_000)
+        self.tdc_bin_count_spin = QtWidgets.QSpinBox()
+        self.tdc_bin_count_spin.setRange(1, 1_000_000)
+        self.tdc_bin_count_spin.setValue(4096)
+
+        self.tdc_test_apply_btn = QtWidgets.QPushButton("Apply")
+        self.tdc_test_clear_btn = QtWidgets.QPushButton("Clear")
+        self.tdc_test_clear_btn.setObjectName("Secondary")
+        self.tdc_test_status_label = QtWidgets.QLabel("pairs: 0 / peak: -")
+        self.tdc_test_status_label.setObjectName("InfoText")
+
+        controls_layout.addWidget(QtWidgets.QLabel("Mode"), 0, 0)
+        controls_layout.addWidget(self.tdc_test_enable_check, 0, 1)
+        controls_layout.addWidget(QtWidgets.QLabel("Start"), 0, 2)
+        controls_layout.addWidget(self.tdc_start_combo, 0, 3)
+        controls_layout.addWidget(QtWidgets.QLabel("Stop"), 0, 4)
+        controls_layout.addWidget(self.tdc_stop_combo, 0, 5)
+        controls_layout.addWidget(QtWidgets.QLabel("REF divisions"), 1, 0)
+        controls_layout.addWidget(self.tdc_refdiv_spin, 1, 1)
+        controls_layout.addWidget(QtWidgets.QLabel("Bin width"), 1, 2)
+        controls_layout.addWidget(self.tdc_bin_width_spin, 1, 3)
+        controls_layout.addWidget(QtWidgets.QLabel("Offset"), 1, 4)
+        controls_layout.addWidget(self.tdc_bin_offset_spin, 1, 5)
+        controls_layout.addWidget(QtWidgets.QLabel("Bins"), 2, 0)
+        controls_layout.addWidget(self.tdc_bin_count_spin, 2, 1)
+        controls_layout.addWidget(self.tdc_test_apply_btn, 2, 3)
+        controls_layout.addWidget(self.tdc_test_clear_btn, 2, 4)
+        controls_layout.addWidget(self.tdc_test_status_label, 2, 5)
+        layout.addWidget(controls_card)
+
+        self.tdc_test_plot = pg.PlotWidget(title="TDC Start/Stop Histogram")
+        self._style_plot_widget(self.tdc_test_plot, "dt bin")
+        self.tdc_test_plot.getPlotItem().setLabel("left", "Counts")
+        self.tdc_test_curve = self.tdc_test_plot.plot(pen=pg.mkPen("#22c55e", width=2))
+        layout.addWidget(self._wrap_card("TDC Start/Stop Histogram", self.tdc_test_plot), 1)
+        return tab
+
     def _build_acquisition_tab(self) -> QtWidgets.QWidget:
         tab = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(tab)
@@ -906,6 +971,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Acquisition / offline
         self.start_recording_btn.clicked.connect(self.on_start_recording)
         self.stop_recording_btn.clicked.connect(c.stop_recording)
+        self.tdc_test_apply_btn.clicked.connect(self.on_apply_tdc_test)
+        self.tdc_test_clear_btn.clicked.connect(self.on_clear_tdc_test)
         self.open_session_btn.clicked.connect(self.on_open_session)
         self.export_hist_csv_btn.clicked.connect(self.on_export_hist_csv)
 
@@ -918,6 +985,7 @@ class MainWindow(QtWidgets.QMainWindow):
         c.temperature_target_changed.connect(self.on_temperature_target_changed)
         c.analog_targets_changed.connect(self.on_analog_targets_changed)
         c.histogram_updated.connect(self.on_histogram_snapshot)
+        c.tdc_test_histogram_updated.connect(self.on_tdc_test_snapshot)
         c.recording_state_changed.connect(self.on_recording_state_changed)
         c.replay_completed.connect(self.on_offline_snapshot)
 
@@ -948,6 +1016,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.read_enable_check.blockSignals(True)
         self.read_enable_check.setChecked(cfg.read_enabled)
         self.read_enable_check.blockSignals(False)
+        tdc = cfg.tdc_test_settings
+        self.tdc_test_enable_check.setChecked(tdc.enabled)
+        self.tdc_start_combo.setCurrentIndex(max(0, min(3, tdc.start_channel)))
+        self.tdc_stop_combo.setCurrentIndex(max(0, min(3, tdc.stop_channel)))
+        self.tdc_refdiv_spin.setValue(tdc.refclk_divisions)
+        self.tdc_bin_width_spin.setValue(tdc.bin_width_raw)
+        self.tdc_bin_offset_spin.setValue(tdc.bin_offset)
+        self.tdc_bin_count_spin.setValue(tdc.bin_count)
 
     def _guard_action(self, func) -> None:
         try:
@@ -1166,6 +1242,22 @@ class MainWindow(QtWidgets.QMainWindow):
         if snapshot.image_projection:
             self.image_view.setImage(np.array(snapshot.image_projection, dtype=float).T, autoLevels=True)
 
+    def on_tdc_test_snapshot(self, snapshot: HistogramSnapshot) -> None:
+        hist = snapshot.histograms.get("tdc_test") if snapshot.histograms else None
+        if hist is None:
+            self.tdc_test_curve.setData([], [])
+            self.tdc_test_status_label.setText("pairs: 0 / peak: -")
+            return
+        values = np.array(hist, dtype=np.uint32)
+        self.tdc_test_curve.setData(np.arange(len(values)), values)
+        total = int(values.sum())
+        if total > 0:
+            peak_bin = int(values.argmax())
+            peak_count = int(values[peak_bin])
+            self.tdc_test_status_label.setText(f"pairs: {total} / peak: bin {peak_bin} ({peak_count})")
+        else:
+            self.tdc_test_status_label.setText("pairs: 0 / peak: -")
+
     def on_recording_state_changed(self, active: bool, text: str) -> None:
         self.acq_status_label.setText("采集中" if active else "未采集")
         self.record_value_big_label.setText("Recording" if active else "Idle")
@@ -1280,6 +1372,32 @@ class MainWindow(QtWidgets.QMainWindow):
             self.append_log(f"Pixel bulk write: {success_count}/{len(results)} success")
             if results:
                 self._show_command_result(results[-1])
+
+        self._guard_action(action)
+
+    def on_apply_tdc_test(self) -> None:
+        def action() -> None:
+            start_ch = int(self.tdc_start_combo.currentData())
+            stop_ch = int(self.tdc_stop_combo.currentData())
+            if start_ch == stop_ch:
+                raise ValueError("Start and stop channels must be different.")
+            snapshot = self.controller.configure_tdc_test(
+                enabled=self.tdc_test_enable_check.isChecked(),
+                start_channel_ui=start_ch,
+                stop_channel_ui=stop_ch,
+                refclk_divisions=self.tdc_refdiv_spin.value(),
+                bin_width_raw=self.tdc_bin_width_spin.value(),
+                bin_offset=self.tdc_bin_offset_spin.value(),
+                bin_count=self.tdc_bin_count_spin.value(),
+            )
+            self.on_tdc_test_snapshot(snapshot)
+
+        self._guard_action(action)
+
+    def on_clear_tdc_test(self) -> None:
+        def action() -> None:
+            snapshot = self.controller.clear_tdc_test_histogram()
+            self.on_tdc_test_snapshot(snapshot)
 
         self._guard_action(action)
 
