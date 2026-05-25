@@ -128,8 +128,8 @@ def main() -> int:
     )
     print(f"   Result: {result2.message}", flush=True)
 
-    # --- Send GPX2 config (0 payload, no data to leak) ---
-    print(f"\n5. Sending GPX2 config command (zero payload, should not leak):", flush=True)
+    # --- Send GPX2 config using the stable manual sequence ---
+    print(f"\n5. Sending GPX2 stable default config command:", flush=True)
     frame3 = encoder.encode_gpx2_config()
     words3 = [struct.unpack_from("<I", frame3, i * 4)[0] for i in range(len(frame3) // 4)]
     print(f"   Frame words: {' '.join(f'0x{w:08X}' for w in words3)}", flush=True)

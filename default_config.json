@@ -1,25 +1,25 @@
 {
-  "target_temperature_c": 0.0,
+  "target_temperature_c": -20.0,
   "analog_targets": {
-    "laser_sync_threshold_mv": 11.0,
-    "pixel_sync_threshold_mv": 555.0,
-    "avalanche_threshold_mv": 1000.0,
-    "bias_voltage_v": 20.0
+    "laser_sync_threshold_mv": 100.0,
+    "pixel_sync_threshold_mv": 1000.0,
+    "avalanche_threshold_mv": 90.0,
+    "bias_voltage_v": 60.0
   },
   "gate_settings": {
     "hold_off_time": 0,
-    "divider": 1,
+    "divider": 200,
     "sig2_enable": false,
-    "sig3_enable": false,
+    "sig3_enable": true,
     "pixel_mode": false,
     "sig2_delay_coarse": 0,
     "sig2_delay_fine": 0,
     "sig2_width_coarse": 0,
-    "sig2_width_fine": 10,
+    "sig2_width_fine": 6,
     "sig3_delay_coarse": 0,
     "sig3_delay_fine": 0,
-    "sig3_width_coarse": 0,
-    "sig3_width_fine": 10
+    "sig3_width_coarse": 2,
+    "sig3_width_fine": 23
   },
   "marker_mapping": {
     "line_event_class": 1,
@@ -30,12 +30,29 @@
     "bin_offset": 0,
     "bin_count": 4096
   },
+  "tdc_test_settings": {
+    "enabled": false,
+    "start_channel": 1,
+    "stop_channel": 2,
+    "source": "gpx2_fpga",
+    "pairing_mode": "prev_start",
+    "time_formula": "forward",
+    "refclk_divisions": 12500,
+    "bin_width_raw": 5,
+    "bin_offset": 0,
+    "bin_count": 50000,
+    "acquisition_time_s": 120.0,
+    "tdc_deadtime_ps": 0.0,
+    "reference_deadtime_ns": 0.0,
+    "detector_deadtime_ns": 100.0,
+    "raw_epoch": 0
+  },
   "save_directory": "./sessions",
   "device_index": 0,
   "read_pipe": 130,
   "write_pipe": 2,
   "read_block_size": 262144,
-  "read_enabled": false,
+  "read_enabled": true,
   "threshold_range_mv": 2500.0,
   "bias_scale": 433.0,
   "temperature_encode_formula_version": "legacy_main_1_py_v1",
